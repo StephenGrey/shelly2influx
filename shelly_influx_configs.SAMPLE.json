@@ -1,0 +1,19 @@
+{
+  "access_token":"",
+  "id_token":  "",
+  "refresh_token": "",
+  "token_type": "Bearer",
+  "username": "ste@.com",
+  "INFLUX_URL":"http://url:8086",
+  "BUCKET":"bucketname",
+  "ORG":"orgname",
+  "INFLUX_TOKEN":"API TOKEN",
+  "SHELLY_URL":"https://shelly URL",
+  "SHELLY_TOKEN":"SHELLY CLOUD API TOKEN",
+  "devices":[{
+	"1":{"id":"device id","name":"Heat & Temp in cellar","location":"home","type":"T&H"},
+	"2":{"id":"device id","name":"Immersion-boiler_room","location":"work","type":"Shelly PM"},
+	"3":{"id":"device id","name":"Home_floodlight","location":"home","type":"Shelly PM"},
+	"4":{"id":"device id","name":"CR-power_meters","location":"work","type":"Shelly Em"}
+	}]
+}
