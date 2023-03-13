@@ -13,6 +13,37 @@ from influxdb_client import InfluxDBClient,Point,WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS,ASYNCHRONOUS
 
 
+def influx_read(query):
+	with InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=ORG) as client:
+		query_api = client.query_api()
+		result = query_api.query(org=org, query=query)
+	return result
+
+"""
+Iterate through the tables and records in the Flux object.
+
+Use the get_value() method to return values.
+Use the get_field() method to return fields.
+results = []
+for table in result:
+  for record in table.records:
+    results.append((record.get_field(), record.get_value()))
+
+print(results)
+[(temperature, 25.3)]
+The Flux object provides the following methods for accessing your data:
+
+get_measurement(): Returns the measurement name of the record.
+get_field(): Returns the field name.
+get_value(): Returns the actual field value.
+values: Returns a map of column values.
+values.get("<your tag>"): Returns a value from the record for given column.
+get_time(): Returns the time of the record.
+get_start(): Returns the inclusive lower time bound of all records in the current table.
+get_stop(): Returns the exclusive upper time bound of all records in the current table.
+"""
+
+
 def influx_write2(tags,fields):
 	with InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=ORG) as client:
 	    write_api = client.write_api(write_options=SYNCHRONOUS)
@@ -47,20 +78,12 @@ def getConfigValue(key, defaultValue):
         return config[key]
     return defaultValue
 
-
-
-try:
-    if len(sys.argv) != 2:
-        print('Usage: python {} <config-file>'.format(sys.argv[0]))
-        sys.exit(1)
-
-    configFilename = sys.argv[1]
+def load_config(configFilename):
+    global lagSecs, intervalSecs,INFLUX_URL, BUCKET, ORG, INFLUX_TOKEN,SHELLY_URL,SHELLY_TOKEN,devices,config
     config = {}
     with open(configFilename) as configFile:
         config = json.load(configFile)
-        
-    startupTime = datetime.utcnow()
-
+    
     intervalSecs=getConfigValue("updateIntervalSecs", 60)
 #    detailedIntervalSecs=getConfigValue("detailedIntervalSecs", 3600)
 #    detailedDataEnabled=getConfigValue("detailedDataEnabled", False);
@@ -73,16 +96,13 @@ try:
     SHELLY_URL=getConfigValue("SHELLY_URL",None)
     SHELLY_TOKEN=getConfigValue("SHELLY_TOKEN",None)
     devices=getConfigValue("devices",[])[0]
+	
 
-#    detailedStartTime = startupTime
-
-
- 
+def get_update():
+    startupTime = datetime.utcnow()
     running = True
-
     signal.signal(signal.SIGINT, handleExit)
     signal.signal(signal.SIGHUP, handleExit)
-
     pauseEvent = Event()
 
 #    intervalSecs=getConfigValue("updateIntervalSecs", 60)
@@ -95,7 +115,6 @@ try:
     while running:
     	now = datetime.utcnow()
     	stopTime = now - timedelta(seconds=lagSecs)
-
     	try:
     		for device_key in devices:
     			device=devices[device_key]	
@@ -104,8 +123,10 @@ try:
     				res=requests.post(SHELLY_URL+"status",data={'id':device['id'],'auth_key':SHELLY_TOKEN})
     				online=res.json()['data']['online']
     				shelly_type=device['type']
+    				
     				#print(shelly_type)
     				#print(f"{device['name']}   Online: {online}")
+    				
     				data=res.json()['data']['device_status']
     				updated=data['_updated']
     				
@@ -125,9 +146,32 @@ try:
     					influx_write2({"location":device['location'],"device":device['name']+"#1","online":online},{"power":float(power1['power']),"power_total":float(power1['total']),"updated":updated})
     						
     					influx_write2({"location":device['location'],"device":device['name']+"#2","online":online},{"power":float(power2['power']),"power_total":float(power2['total']),"updated":updated})
-    			
+    				
     				#	print(f"UNIT2: Power:{power2['power']}W {power2['total']/1000:.2f} kWh  Updated:{updated}")
-    			
+    				elif shelly_type=='Shelly Uni':
+    					temp=data['ext_temperature']
+    					if len(temp)==2:
+    						temp1=temp[0].get('tC')
+    						temp1_ID=temp[0].get('hwID')
+    						temp2=temp[1].get('tC')
+    						temp2_ID=temp[1].get('hwID')
+    						#print(temp1,temp1_ID,temp2,temp2_ID)
+    					relays=data['relays']
+    					out1=relays[0].get('ison')
+    					out2=relays[1].get('ison')
+    					inputs=data['inputs']
+    					input1_event=inputs[0].get("event")
+    					input1_cnt=inputs[0].get("event_cnt")
+    					input1_input=inputs[0].get("input")
+    					input2_event=inputs[1].get("event")
+    					input2_cnt=inputs[1].get("event_cnt")
+    					input2_input=inputs[1].get("input")
+    					
+    					#print(out1,out2,input1_event,input1_cnt,input1_input,input2_event,input2_cnt,input2_input)
+    					#print(data)
+    					influx_write2({"location":device['location'],"device":device['name']+"#1","online":online},{"power":float(power1['power']),"power_total":float(power1['total']),"updated":updated})
+    					influx_write2({"location":device['location'],"device":device['name']+"#2","temp":online},{"input":float(power2['power']),"power_total":float(power2['total']),"updated":updated})
+    					
     				if 'switch:0' in data:
     					output="OFF" if not data['switch:0']['output'] else "ON"
     					power=float(data['switch:0']['apower'])
@@ -151,8 +195,18 @@ try:
     	pauseEvent.wait(intervalSecs)
 
     info('Finished')
-except:
-    error('Fatal error: {}'.format(sys.exc_info())) 
-    traceback.print_exc()
+#except:
+#    error('Fatal error: {}'.format(sys.exc_info())) 
+#    traceback.print_exc()
+#    
     
-    
+if __name__ == "__main__":
+	if len(sys.argv) != 2:
+		print('Usage: python {} <config-file>'.format(sys.argv[0]))
+	else:
+		configFilename = sys.argv[1]
+		load_config(configFilename)
+		get_update()
+#    detailedStartTime = startupTime
+ 
+ 
