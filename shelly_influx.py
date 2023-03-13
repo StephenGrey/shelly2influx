@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""install as a service - shelly_influx"""
+
 
 from datetime import datetime,timedelta
 import json
@@ -143,7 +145,11 @@ def get_update():
     					power2=data['emeters'][1]
     				#	print(f"UNIT1: Power:{power1['power']}W {power1['total']/1000:.2f} kWh  Updated:{updated}")
     					
-    					influx_write2({"location":device['location'],"device":device['name']+"#1","online":online},{"power":float(power1['power']),"power_total":float(power1['total']),"updated":updated})
+    					influx_write2({"location":device['location'],"device":device['name']+"#1","online":online},{
+    						"power":float(power1['power']),
+    						"power_total":float(power1['total']),
+    						"updated":updated
+    						})
     						
     					influx_write2({"location":device['location'],"device":device['name']+"#2","online":online},{"power":float(power2['power']),"power_total":float(power2['total']),"updated":updated})
     				
@@ -169,8 +175,30 @@ def get_update():
     					
     					#print(out1,out2,input1_event,input1_cnt,input1_input,input2_event,input2_cnt,input2_input)
     					#print(data)
-    					influx_write2({"location":device['location'],"device":device['name']+"#1","online":online},{"power":float(power1['power']),"power_total":float(power1['total']),"updated":updated})
-    					influx_write2({"location":device['location'],"device":device['name']+"#2","temp":online},{"input":float(power2['power']),"power_total":float(power2['total']),"updated":updated})
+    					influx_write2(
+    						{
+    					"location":device['location'],"device":device['name']+"#1","online":online
+    						},
+    						{
+    						"temperature":float(temp1),
+    						"button":input1_input,
+    						"input_event": input1_event,
+    						"input_count":input1_cnt,
+    						"out":out1
+    						}
+    						)
+    					influx_write2(
+    						{
+    					"location":device['location'],"device":device['name']+"#2","online":online
+    						},
+   							{
+   							"temperature":float(temp2),
+    						"button":input2_input,
+    						"input_event": input2_event,
+    						"input_count":input2_cnt,
+    						"out":out2
+    						}
+    					)
     					
     				if 'switch:0' in data:
     					output="OFF" if not data['switch:0']['output'] else "ON"
