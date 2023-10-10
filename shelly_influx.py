@@ -172,8 +172,13 @@ def get_update():
     					input2_event=inputs[1].get("event")
     					input2_cnt=inputs[1].get("event_cnt")
     					input2_input=inputs[1].get("input")
-    					
-    					#print(out1,out2,input1_event,input1_cnt,input1_input,input2_event,input2_cnt,input2_input)
+    					acds=data.get('adcs')
+    					if acds:
+    						ac_input=next(iter(acds or []), None)
+    						ac_volts=float(ac_input.get('voltage'))
+    					else:
+    						ac_volts=0.0
+    					#print(f"Output from Uni: {ac_volts} volts")
     					#print(data)
     					influx_write2(
     						{
@@ -184,7 +189,8 @@ def get_update():
     						"button":input1_input,
     						"input_event": input1_event,
     						"input_count":input1_cnt,
-    						"out":out1
+    						"out":out1,
+    						"input_volts":ac_volts
     						}
     						)
     					influx_write2(
@@ -196,7 +202,8 @@ def get_update():
     						"button":input2_input,
     						"input_event": input2_event,
     						"input_count":input2_cnt,
-    						"out":out2
+    						"out":out2,
+    						"input_volts":ac_volts
     						}
     					)
     					
