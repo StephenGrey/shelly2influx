@@ -122,16 +122,23 @@ def get_update():
     			device=devices[device_key]	
     			
     			try:
-    				res=requests.post(SHELLY_URL+"status",data={'id':device['id'],'auth_key':SHELLY_TOKEN})
-    				online=res.json()['data']['online']
+
     				shelly_type=device['type']
     				
-    				#print(shelly_type)
+#    				print(shelly_type)
+    				
     				#print(f"{device['name']}   Online: {online}")
+    				res=requests.post(SHELLY_URL+"status",data={'id':device['id'],'auth_key':SHELLY_TOKEN})
     				
-    				data=res.json()['data']['device_status']
-    				updated=data['_updated']
+#    				print(res.json())
     				
+    				if 'data' in res.json():
+    					online=res.json()['data'].get('online')
+    					data=res.json()['data']['device_status']
+    					updated=data['_updated']
+    				else:
+    					error(f"No data for device {device}")
+
     				if shelly_type=='T&H':
     					temp=data['tmp']
     				#	print(f"Temp: {temp['value']} {temp['units']}   Last updated:{updated}")
@@ -155,23 +162,47 @@ def get_update():
     				
     				#	print(f"UNIT2: Power:{power2['power']}W {power2['total']/1000:.2f} kWh  Updated:{updated}")
     				elif shelly_type=='Shelly Uni':
-    					temp=data['ext_temperature']
-    					if len(temp)==2:
-    						temp1=temp[0].get('tC')
-    						temp1_ID=temp[0].get('hwID')
-    						temp2=temp[1].get('tC')
-    						temp2_ID=temp[1].get('hwID')
-    						#print(temp1,temp1_ID,temp2,temp2_ID)
-    					relays=data['relays']
-    					out1=relays[0].get('ison')
-    					out2=relays[1].get('ison')
-    					inputs=data['inputs']
-    					input1_event=inputs[0].get("event")
-    					input1_cnt=inputs[0].get("event_cnt")
-    					input1_input=inputs[0].get("input")
-    					input2_event=inputs[1].get("event")
-    					input2_cnt=inputs[1].get("event_cnt")
-    					input2_input=inputs[1].get("input")
+    					temp=data.get('ext_temperature')
+    					if temp:
+#    						print(temp)
+    						if len(temp)==2:
+    							temp1=temp['0'].get('tC')
+    							temp1_ID=temp['0'].get('hwID')
+    							temp2=temp['1'].get('tC')
+    							temp2_ID=temp['1'].get('hwID')
+    							#print(temp1,temp1_ID,temp2,temp2_ID)
+    					else:
+    						temp1,temp2=0.0,0.0
+    					
+    					relays=data.get('relays')
+    					if relays:
+    						out1=relays[0].get('ison')
+    						out2=relays[1].get('ison')
+    					else:
+    						out1,out2=None,None
+    					
+    					inputs=data.get('inputs')
+    					if inputs:
+    						input1_event=inputs[0].get("event")
+    						input1_cnt=inputs[0].get("event_cnt")
+    						input1_input=inputs[0].get("input")
+    						input2_event=inputs[1].get("event")
+    						input2_cnt=inputs[1].get("event_cnt")
+    						input2_input=inputs[1].get("input")
+    					
+    					
+    					else:
+    						input1_event,input1_cnt,input1_input,input2_event,inpu2_cnt,input2_input=None,None,None,None,None,None
+    					
+    					if 'input:2' in data:
+    						counts=data["input:2"].get("counts")
+    						if counts:
+    							total_count=counts['total']
+    						else:
+    							total_count=None
+    					else:
+    						total_count=None
+    					
     					acds=data.get('adcs')
     					if acds:
     						ac_input=next(iter(acds or []), None)
@@ -190,7 +221,8 @@ def get_update():
     						"input_event": input1_event,
     						"input_count":input1_cnt,
     						"out":out1,
-    						"input_volts":ac_volts
+    						"input_volts":ac_volts,
+    						"total_count":total_count
     						}
     						)
     					influx_write2(
@@ -209,19 +241,19 @@ def get_update():
     					
     				if 'switch:0' in data:
     					output="OFF" if not data['switch:0']['output'] else "ON"
-    					power=float(data['switch:0']['apower'])
-    					energy=float(data['switch:0']['aenergy']['total'])
-    					by_min0=float(data['switch:0']['aenergy']['by_minute'][0])
-    					by_min1=float(data['switch:0']['aenergy']['by_minute'][1])
-    					by_min2=float(data['switch:0']['aenergy']['by_minute'][2])
-    					#Energy consumption by minute (in Milliwatt-hours) for the last three minutes (the lower the index of the element in the array, the closer to the current moment the minute)
-    					last_min=data['switch:0']['aenergy']['minute_ts']
-    					#Unix timestamp of the first second of the last minute (in UTC)
-    				#	print(f"RELAY {output} Power:{power}W  Consumed: {energy:.2f} kWh")
-    					influx_write2({"location":device['location'],"device":device['name'],"online":online},{"power":power,"consumed_energy":energy,"updated":updated,"last_min":last_min,"by_min0":by_min0,"by_min1":by_min1,"by_min2":by_min2})
+    					if 'apower' in data['switch:0']:
+    						power=float(data['switch:0']['apower'])
+    						energy=float(data['switch:0']['aenergy']['total'])
+    						by_min0=float(data['switch:0']['aenergy']['by_minute'][0])
+    						by_min1=float(data['switch:0']['aenergy']['by_minute'][1])
+    						by_min2=float(data['switch:0']['aenergy']['by_minute'][2])
+    						#Energy consumption by minute (in Milliwatt-hours) for the last three minutes (the lower the index of the element in the array, the closer to the current moment the minute)
+    						last_min=data['switch:0']['aenergy']['minute_ts']
+    						#Unix timestamp of the first second of the last minute (in UTC)
+    						#	print(f"RELAY {output} Power:{power}W  Consumed: {energy:.2f} kWh")
+    						influx_write2({"location":device['location'],"device":device['name'],"online":online},{"power":power,"consumed_energy":energy,"updated":updated,"last_min":last_min,"by_min0":by_min0,"by_min1":by_min1,"by_min2":by_min2})
     			except Exception as e:
     				error(f'Exception {e}')
-
 	
     	except:
     		error('Failed to record new usage data: {}'.format(sys.exc_info())) 
